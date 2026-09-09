@@ -813,9 +813,10 @@ function cerrarModalFormulario() {
 }
 
 async function guardarServicio() {
+  // No permitir entregar si el pago está pendiente o en abono
   if (
     formulario.value.estadoEquipo === 'entregado' &&
-    formulario.value.estadoPago === 'pendiente'
+    ['pendiente', 'abono'].includes(formulario.value.estadoPago)
   ) {
     mostrarAviso(
       'No se puede entregar el equipo mientras el pago esté pendiente',
