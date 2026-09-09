@@ -483,13 +483,13 @@
                 <q-select v-model="formulario.modelo" :options="opcionesModelosFiltrados
                   " outlined dense use-input fill-input hide-selected new-value-mode="add-unique" input-debounce="0"
                   label="Modelo" :disable="!formulario.marca" :hint="!formulario.marca
-                      ? 'Primero selecciona una marca'
-                      : 'Selecciona o escribe el modelo'
+                    ? 'Primero selecciona una marca'
+                    : 'Selecciona o escribe el modelo'
                     " :rules="[
-                    val =>
-                      !!val ||
-                      'El modelo es obligatorio'
-                  ]" />
+                      val =>
+                        !!val ||
+                        'El modelo es obligatorio'
+                    ]" />
 
               </div>
 
@@ -590,10 +590,10 @@
                 <q-select v-model="formulario.metodoPago
                   " :options="opcionesMetodoPago
                     " outlined dense label="Método de pago" :rules="[
-                    val =>
-                      !!val ||
-                      'Selecciona un método de pago'
-                  ]" />
+                      val =>
+                        !!val ||
+                        'Selecciona un método de pago'
+                    ]" />
 
               </div>
 
@@ -607,10 +607,10 @@
                 <q-select v-model="formulario.estadoPago
                   " :options="opcionesEstadoPago
                     " emit-value map-options outlined dense label="Estado del pago" :rules="[
-                    val =>
-                      !!val ||
-                      'Selecciona el estado del pago'
-                  ]" />
+                      val =>
+                        !!val ||
+                        'Selecciona el estado del pago'
+                    ]" />
 
               </div>
 
@@ -703,10 +703,10 @@
                 <q-select v-model="formulario.estadoEquipo
                   " :options="opcionesEstadoEquipo
                     " emit-value map-options outlined dense label="Estado del equipo" :rules="[
-                    val =>
-                      !!val ||
-                      'Selecciona el estado del equipo'
-                  ]" />
+                      val =>
+                        !!val ||
+                        'Selecciona el estado del equipo'
+                    ]" />
 
               </div>
 
@@ -826,8 +826,8 @@
     ========================================================== -->
 
     <q-banner v-if="mensajeAviso" class="fixed-bottom text-white text-center text-weight-bold" :class="mensajeAvisoTipo === 'error'
-        ? 'bg-negative'
-        : 'bg-positive'
+      ? 'bg-negative'
+      : 'bg-positive'
       " style="z-index:9999">
 
       {{ mensajeAviso }}
@@ -2936,7 +2936,6 @@ function mostrarAviso(
     padding: 10px;
 
   }
-
 
   .header-content {
 
