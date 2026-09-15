@@ -82,7 +82,7 @@
                       :key="tipo"
                       color="grey-3"
                       text-color="grey-9">
-                      {{ etiquetaReparacion(tipo) }}
+                      {{ etiquetaReparacionServicio(servicio, tipo) }}
                     </q-badge>
                   </div>
                 </div>
@@ -145,12 +145,13 @@
                   <span>Calificación:</span>
 
                   <q-rating
-                    v-model="servicio.calificacion"
-                    readonly
+                    :model-value="servicio.calificacion"
+                    :readonly="Number(servicio.calificacion) > 0"
                     size="1.3em"
                     color="amber"
                     icon="star_border"
                     icon-selected="star"
+                    @update:model-value="valor => calificarServicio(servicio, valor)"
                   />
                 </div>
               </q-card-section>
@@ -263,6 +264,18 @@
                   :disable="!formulario.marca"
                   :hint="!formulario.marca ? 'Primero selecciona una marca' : 'Selecciona o escribe el modelo'"
                   :rules="[val => !!val || 'El modelo es obligatorio']"
+                  @filter="filtrarModelos"
+                />
+              </div>
+
+              <!-- Caja para escribir la marca cuando se elige "Otro" -->
+              <div v-if="formulario.marca === 'Otro'" class="col-12 col-sm-6">
+                <q-input
+                  v-model="formulario.otraMarca"
+                  outlined dense
+                  label="Especifica la marca"
+                  hint="Escribe el nombre de la marca del equipo"
+                  :rules="[val => !!val?.trim() || 'Escribe la marca del equipo']"
                 />
               </div>
 
@@ -286,6 +299,17 @@
                   </template>
 
                 </q-select>
+              </div>
+
+              <!-- Caja para especificar la reparación cuando se elige "Otros" -->
+              <div v-if="formulario.tipoReparacion?.includes('otros')" class="col-12">
+                <q-input
+                  v-model="formulario.detalleOtraReparacion"
+                  outlined dense
+                  label="Especifica la reparación"
+                  hint="Describe brevemente en qué consiste la reparación"
+                  :rules="[val => !!val?.trim() || 'Describe la reparación']"
+                />
               </div>
 
               <div class="col-12 col-sm-6">
@@ -598,6 +622,18 @@ function filtrarMarcas(val, update) {
   })
 }
 
+// Filtra los modelos disponibles según lo que el usuario va escribiendo,
+// tomando siempre como base la lista de la marca actualmente seleccionada.
+function filtrarModelos(val, update) {
+  update(() => {
+    const texto = String(val || '').toLowerCase()
+    const listaBase = modelosPorMarca[formulario.value.marca] || []
+    opcionesModelosFiltrados.value = listaBase.filter(m =>
+      m.toLowerCase().includes(texto)
+    )
+  })
+}
+
 function cambiarMarca(nuevaMarca) {
   opcionesModelosFiltrados.value = modelosPorMarca[nuevaMarca] || []
 
@@ -605,6 +641,12 @@ function cambiarMarca(nuevaMarca) {
 
   if (modeloActual && !opcionesModelosFiltrados.value.includes(modeloActual)) {
     formulario.value.modelo = ''
+  }
+
+  // Si el usuario cambia de marca y ya no es "Otro", limpiamos el texto
+  // que hubiera escrito en la caja de marca personalizada.
+  if (nuevaMarca !== 'Otro') {
+    formulario.value.otraMarca = ''
   }
 }
 
@@ -640,8 +682,10 @@ let temporizadorAviso
 const formularioVacio = () => ({
   cliente: '',
   marca: '',
+  otraMarca: '',
   modelo: '',
   tipoReparacion: [],
+  detalleOtraReparacion: '',
   tecnico: null,
   fechaRecepcion: '',
   precio: 0,
@@ -751,6 +795,15 @@ function etiquetaReparacion(valor) {
     'Sin especificar'
 }
 
+// Igual que etiquetaReparacion, pero si el tipo es "otros" y el servicio
+// tiene el detalle guardado, lo muestra en vez de la etiqueta genérica.
+function etiquetaReparacionServicio(servicio, tipo) {
+  if (tipo === 'otros' && servicio.detalleOtraReparacion) {
+    return `Otros: ${servicio.detalleOtraReparacion}`
+  }
+  return etiquetaReparacion(tipo)
+}
+
 function etiquetaEstado(estado) {
   return opcionesEstadoEquipo.find(o => o.value === estado)?.label ||
     'Sin estado'
@@ -808,10 +861,13 @@ function abrirModalEditar(servicio) {
   idEnEdicion.value = servicio.id
 
   formulario.value = {
+    ...formularioVacio(),
     ...servicio,
     tipoReparacion: normalizarReparaciones(servicio.tipoReparacion),
     montoAbonado: Number(servicio.montoAbonado) || 0,
-    abonoActual: 0
+    abonoActual: 0,
+    otraMarca: '',
+    detalleOtraReparacion: servicio.detalleOtraReparacion || ''
   }
 
   opcionesModelosFiltrados.value = modelosPorMarca[servicio.marca] || []
@@ -882,14 +938,30 @@ async function guardarServicio() {
     return
   }
 
+  // Si la marca es "Otro", usamos el texto que el usuario escribió
+  // en la caja de marca personalizada como la marca real a guardar.
+  let marcaFinal = formulario.value.marca
+  if (marcaFinal === 'Otro' && formulario.value.otraMarca?.trim()) {
+    marcaFinal = formulario.value.otraMarca.trim()
+  }
+
+  // Si se seleccionó "Otros" en reparaciones, guardamos el detalle escrito.
+  const tipoReparacionFinal = normalizarReparaciones(formulario.value.tipoReparacion)
+  const detalleOtraReparacionFinal = tipoReparacionFinal.includes('otros')
+    ? (formulario.value.detalleOtraReparacion || '').trim()
+    : ''
+
   const servicioFinal = {
     ...formulario.value,
+    marca: marcaFinal,
     precio,
     montoAbonado: totalAbonado,
-    tipoReparacion: normalizarReparaciones(formulario.value.tipoReparacion)
+    tipoReparacion: tipoReparacionFinal,
+    detalleOtraReparacion: detalleOtraReparacionFinal
   }
 
   delete servicioFinal.abonoActual
+  delete servicioFinal.otraMarca
 
   if (modoEdicion.value) {
     const indice = servicios.value.findIndex(
@@ -951,6 +1023,20 @@ function eliminarServicio() {
   mostrarModalEliminar.value = false
   servicioAEliminar.value = null
   mostrarAviso('Servicio eliminado')
+}
+
+// Registra la calificación una sola vez. Si el servicio ya tiene una
+// calificación mayor a 0, no permite modificarla (el q-rating además
+// queda en modo solo-lectura desde el momento en que se califica).
+function calificarServicio(servicio, valor) {
+  if (Number(servicio.calificacion) > 0) return
+
+  const indice = servicios.value.findIndex(s => s.id === servicio.id)
+  if (indice === -1) return
+
+  servicios.value[indice].calificacion = valor
+  actualizarServiciosFiltrados()
+  mostrarAviso('¡Gracias por tu calificación!')
 }
 
 function limpiarFiltros() {
