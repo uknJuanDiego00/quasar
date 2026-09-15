@@ -12,6 +12,7 @@
         </div>
         <q-space />
         <q-input v-model="textoBusqueda" dense outlined clearable bg-color="white"
+          @update:model-value="actualizarServiciosFiltrados"
           placeholder="Buscar cliente, marca o modelo..." class="search">
           <template #prepend>
             <q-icon name="search" color="grey-7" />
@@ -42,14 +43,15 @@
           </div>
           <q-select v-model="filtroEstado" :options="opcionesFiltroEtapas"
             emit-value map-options dense outlined bg-color="white"
-            label="Etapa de trabajo" style="min-width:220px" />
+            label="Etapa de trabajo" style="min-width:220px"
+            @update:model-value="actualizarServiciosFiltrados" />
         </div>
 
         <div class="row q-col-gutter-md">
           <div v-for="servicio in serviciosFiltrados" :key="servicio.id"
             class="col-12 col-sm-6 col-md-4">
 
-            <q-card flat class="device-card">
+            <q-card flat class="device-card" :class="claseTarjeta(servicio)">
 
               <div v-if="servicio.estadoPago === 'pendiente'" class="payment pending">
                 PAGO PENDIENTE
@@ -93,6 +95,7 @@
                 <div class="row justify-between q-mb-sm">
                   <span class="text-grey-7">Etapa:</span>
                   <q-badge :color="colorEstado(servicio.estadoEquipo)" class="text-weight-bold">
+                    <q-icon :name="iconoEstado(servicio.estadoEquipo)" size="15px" class="q-mr-xs" />
                     {{ etiquetaEstado(servicio.estadoEquipo) }}
                   </q-badge>
                 </div>
@@ -143,11 +146,11 @@
 
                   <q-rating
                     v-model="servicio.calificacion"
+                    readonly
                     size="1.3em"
                     color="amber"
                     icon="star_border"
                     icon-selected="star"
-                    @update:model-value="guardarCambiosDirectos(servicio)"
                   />
                 </div>
               </q-card-section>
@@ -461,7 +464,8 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
+import { useLocalStorage } from '@vueuse/core'
 
 const opcionesTipoReparacion = [
   { label: 'Cambio de pantalla', value: 'pantalla' },
@@ -610,14 +614,14 @@ function normalizarReparaciones(valor) {
   return []
 }
 
-const servicios = ref(
-  JSON.parse(localStorage.getItem('taller-don-efrain-servicios') || '[]').map(servicio => ({
+const servicios = useLocalStorage('taller-don-efrain-servicios', [])
+
+servicios.value = servicios.value.map(servicio => ({
     ...servicio,
     tipoReparacion: normalizarReparaciones(servicio.tipoReparacion),
     montoAbonado: Number(servicio.montoAbonado) || 0,
     calificacion: Number(servicio.calificacion) || 0
-  }))
-)
+}))
 
 const textoBusqueda = ref('')
 const filtroEstado = ref('todos')
@@ -652,23 +656,12 @@ const formularioVacio = () => ({
 
 const formulario = ref(formularioVacio())
 
-function guardarDatos() {
-  const datos = servicios.value.map(servicio => {
-    const copia = { ...servicio }
-    delete copia.abonoActual
-    return copia
-  })
+const serviciosFiltrados = ref([])
 
-  localStorage.setItem(
-    'taller-don-efrain-servicios',
-    JSON.stringify(datos)
-  )
-}
-
-const serviciosFiltrados = computed(() => {
+function actualizarServiciosFiltrados() {
   const texto = textoBusqueda.value.trim().toLowerCase()
 
-  return servicios.value.filter(servicio =>
+  serviciosFiltrados.value = servicios.value.filter(servicio =>
     (filtroEstado.value === 'todos' ||
       servicio.estadoEquipo === filtroEstado.value) &&
     (!texto ||
@@ -676,7 +669,9 @@ const serviciosFiltrados = computed(() => {
         String(valor || '').toLowerCase().includes(texto)
       ))
   )
-})
+}
+
+actualizarServiciosFiltrados()
 
 const resumen = [
   {
@@ -770,6 +765,26 @@ function colorEstado(estado) {
   }[estado] || 'grey'
 }
 
+function iconoEstado(estado) {
+  return {
+    recibido: 'inventory_2',
+    en_reparacion: 'build_circle',
+    listo: 'task_alt',
+    entregado: 'verified'
+  }[estado] || 'help_outline'
+}
+
+function claseTarjeta(servicio) {
+  if (servicio.estadoEquipo === 'entregado') return 'card-entregada'
+  if (calcularSaldo(servicio) > 0) return 'card-pago-pendiente'
+  if (servicio.estadoEquipo === 'listo') return 'card-lista'
+  return ''
+}
+
+function opcionEstadoEquipoDeshabilitada(opcion) {
+  return opcion.value === 'entregado' && calcularSaldo(formulario.value) > 0
+}
+
 function abrirModalNuevo() {
   modoEdicion.value = false
   idEnEdicion.value = null
@@ -813,18 +828,6 @@ function cerrarModalFormulario() {
 }
 
 async function guardarServicio() {
-  // No permitir entregar si el pago está pendiente o en abono
-  if (
-    formulario.value.estadoEquipo === 'entregado' &&
-    ['pendiente', 'abono'].includes(formulario.value.estadoPago)
-  ) {
-    mostrarAviso(
-      'No se puede entregar el equipo mientras el pago esté pendiente',
-      'error'
-    )
-    return
-  }
-
   const valido = await formularioRef.value?.validate()
 
   if (!valido) {
@@ -871,6 +874,14 @@ async function guardarServicio() {
     formulario.value.estadoPago = 'pagado'
   }
 
+  if (formulario.value.estadoEquipo === 'entregado' && totalAbonado < precio) {
+    mostrarAviso(
+      'No se puede entregar el equipo mientras tenga saldo pendiente',
+      'error'
+    )
+    return
+  }
+
   const servicioFinal = {
     ...formulario.value,
     precio,
@@ -913,13 +924,8 @@ async function guardarServicio() {
     )
   }
 
-  guardarDatos()
+  actualizarServiciosFiltrados()
   cerrarModalFormulario()
-}
-
-function guardarCambiosDirectos(servicio) {
-  guardarDatos()
-  mostrarAviso('Calificación guardada')
 }
 
 function abrirConfirmarEliminar(servicio) {
@@ -941,7 +947,7 @@ function eliminarServicio() {
     servicio => servicio.id !== servicioAEliminar.value.id
   )
 
-  guardarDatos()
+  actualizarServiciosFiltrados()
   mostrarModalEliminar.value = false
   servicioAEliminar.value = null
   mostrarAviso('Servicio eliminado')
@@ -950,6 +956,7 @@ function eliminarServicio() {
 function limpiarFiltros() {
   textoBusqueda.value = ''
   filtroEstado.value = 'todos'
+  actualizarServiciosFiltrados()
 }
 
 function mostrarAviso(texto, tipo = 'exito') {
@@ -1017,6 +1024,21 @@ function mostrarAviso(texto, tipo = 'exito') {
   box-shadow:0 1px 3px rgba(0,0,0,.05);
   overflow:hidden;
   font-size:14.5px;
+}
+
+.card-pago-pendiente {
+  border-color:#fecaca;
+  box-shadow:0 2px 8px rgba(220,38,38,.10);
+}
+
+.card-lista {
+  border-color:#bbf7d0;
+  box-shadow:0 2px 8px rgba(22,163,74,.10);
+}
+
+.card-entregada {
+  border-color:#cbd5e1;
+  background:#f8fafc;
 }
 
 .device-card .text-caption {
