@@ -253,11 +253,7 @@
                 />
               </div>
 
-<<<<<<< HEAD
               <div v-if="formulario.marca !== 'Otro'" class="col-6 col-sm-3">
-=======
-              <div class="col-6 col-sm-3">
->>>>>>> 3ea7a04b50b89b657ce2c0d973a74b8c5b428737
                 <q-select
                   v-model="formulario.modelo"
                   :options="opcionesModelosFiltrados"
@@ -1243,8 +1239,4 @@ function mostrarAviso(texto, tipo = 'exito') {
     width:70px;
   }
 }
-<<<<<<< HEAD
 </style>
-=======
-</style>
->>>>>>> 3ea7a04b50b89b657ce2c0d973a74b8c5b428737
