@@ -339,7 +339,7 @@
                   label="Precio total"
                   :rules="[
                     val => val !== null && val !== '' || 'El precio es obligatorio',
-                    val => Number(val) >= 0 || 'El precio no puede ser negativo'
+                    val => Number(val) > 0 || 'El precio debe ser mayor a cero'
                   ]"
                 />
               </div>
