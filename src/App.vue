@@ -860,17 +860,20 @@ function abrirModalEditar(servicio) {
   modoEdicion.value = true
   idEnEdicion.value = servicio.id
 
+  const esMarcaConocida = opcionesMarcas.includes(servicio.marca)
+
   formulario.value = {
     ...formularioVacio(),
     ...servicio,
+    marca: esMarcaConocida ? servicio.marca : 'Otro',
+    otraMarca: esMarcaConocida ? '' : servicio.marca,
     tipoReparacion: normalizarReparaciones(servicio.tipoReparacion),
     montoAbonado: Number(servicio.montoAbonado) || 0,
     abonoActual: 0,
-    otraMarca: '',
     detalleOtraReparacion: servicio.detalleOtraReparacion || ''
   }
 
-  opcionesModelosFiltrados.value = modelosPorMarca[servicio.marca] || []
+  opcionesModelosFiltrados.value = modelosPorMarca[formulario.value.marca] || []
   opcionesMarcasFiltradas.value = opcionesMarcas
   mostrarModalFormulario.value = true
 }
