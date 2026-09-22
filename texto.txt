@@ -1,0 +1,760 @@
+<template>
+  <q-layout view="hHh lpR fFf" class="app-layout">
+    <!-- ===================== HEADER ===================== -->
+    <q-header elevated class="header-taller">
+      <q-toolbar class="q-py-xs q-px-md">
+        <!-- Nombre del Taller -->
+        <div>
+          <q-toolbar-title class="text-weight-bold text-h6">
+            Taller Don Efraín
+          </q-toolbar-title>
+          <div class="text-caption text-grey-4">Servicio técnico de celulares y tablets</div>
+        </div>
+
+        <q-space />
+
+        <!-- Buscador integrado en el Header -->
+        <div class="search-header-box q-mx-md">
+          <q-input
+            v-model="textoBusqueda"
+            dense
+            outlined
+            clearable
+            placeholder="Buscar por cliente, marca o modelo..."
+            class="header-search-input"
+            bg-color="white"
+          >
+            <template v-slot:prepend>
+              <q-icon name="search" color="grey-7" />
+            </template>
+          </q-input>
+        </div>
+
+        <q-space />
+
+        <!-- Botón Nuevo servicio -->
+        <q-btn
+          unelevated
+          color="white"
+          text-color="primary"
+          icon="add"
+          label="Nuevo servicio"
+          class="text-weight-bold btn-nuevo"
+          @click="abrirModalNuevo()"
+        />
+      </q-toolbar>
+    </q-header>
+
+    <q-page-container>
+      <q-page class="page-content q-pa-md">
+        <!-- ===================== TARJETAS DE RESUMEN ===================== -->
+        <div class="row q-col-gutter-md q-mb-md">
+          <div class="col-6 col-sm-3">
+            <q-card flat class="stat-card">
+              <q-card-section class="q-pa-sm text-center">
+                <div class="text-caption text-grey-7">En taller</div>
+                <div class="text-h5 text-weight-bold text-primary">
+                  {{ contarPorEstado('recibido') + contarPorEstado('en_reparacion') }}
+                </div>
+              </q-card-section>
+            </q-card>
+          </div>
+
+          <div class="col-6 col-sm-3">
+            <q-card flat class="stat-card">
+              <q-card-section class="q-pa-sm text-center">
+                <div class="text-caption text-grey-7">Listos para entregar</div>
+                <div class="text-h5 text-weight-bold text-positive">
+                  {{ contarPorEstado('listo') }}
+                </div>
+              </q-card-section>
+            </q-card>
+          </div>
+
+          <div class="col-6 col-sm-3">
+            <q-card flat class="stat-card">
+              <q-card-section class="q-pa-sm text-center">
+                <div class="text-caption text-grey-7">Pagos pendientes</div>
+                <div class="text-h5 text-weight-bold text-negative">
+                  {{ contarPagosPendientes() }}
+                </div>
+              </q-card-section>
+            </q-card>
+          </div>
+
+          <div class="col-6 col-sm-3">
+            <q-card flat class="stat-card">
+              <q-card-section class="q-pa-sm text-center">
+                <div class="text-caption text-grey-7">Total fiado (abonos)</div>
+                <div class="text-h5 text-weight-bold text-teal-8">
+                  ${{ formatearNumero(totalFiado()) }}
+                </div>
+              </q-card-section>
+            </q-card>
+          </div>
+        </div>
+
+        <!-- ===================== BARRA DE CONTROL Y MENÚ DESPLEGABLE DE ETAPAS ===================== -->
+        <div class="row items-center justify-between q-mb-md control-bar q-pa-sm">
+          <div class="text-subtitle1 text-weight-bold text-grey-9 q-px-xs">
+            Servicios Registrados ({{ obtenerServiciosFiltrados().length }})
+          </div>
+
+          <!-- Menú desplegable para ver y filtrar las etapas de trabajo -->
+          <div class="row items-center q-gutter-sm">
+            <span class="text-caption text-grey-8 text-weight-medium">Etapa de trabajo:</span>
+            <q-select
+              v-model="filtroEstado"
+              :options="opcionesFiltroEtapas"
+              emit-value
+              map-options
+              dense
+              outlined
+              bg-color="white"
+              style="min-width: 220px"
+            />
+          </div>
+        </div>
+
+        <!-- ===================== LISTADO DE DISPOSITIVOS ===================== -->
+        <div class="row q-col-gutter-md">
+          <div
+            v-for="servicio in obtenerServiciosFiltrados()"
+            :key="servicio.id"
+            class="col-12 col-sm-6 col-md-4"
+          >
+            <q-card flat class="device-card">
+              <!-- Franja de aviso de Pago -->
+              <div
+                v-if="servicio.estadoPago === 'pendiente'"
+                class="bg-negative text-white text-caption text-center text-weight-bold q-py-xs"
+              >
+                PAGO PENDIENTE
+              </div>
+              <div
+                v-else-if="servicio.estadoPago === 'abono'"
+                class="bg-orange-8 text-white text-caption text-center text-weight-bold q-py-xs"
+              >
+                ABONADO — Falta ${{ formatearNumero(calcularSaldo(servicio)) }}
+              </div>
+
+              <q-card-section class="q-pb-xs">
+                <div class="row items-center justify-between no-wrap">
+                  <div>
+                    <div class="text-subtitle1 text-weight-bold text-grey-9">{{ servicio.cliente }}</div>
+                    <div class="text-body2 text-primary text-weight-medium">
+                      {{ servicio.marca }} {{ servicio.modelo }}
+                    </div>
+                  </div>
+                  <q-badge color="grey-3" text-color="grey-9" class="q-px-sm q-py-xs">
+                    {{ obtenerEtiquetaReparacion(servicio.tipoReparacion) }}
+                  </q-badge>
+                </div>
+              </q-card-section>
+
+              <q-separator class="q-my-xs" />
+
+              <q-card-section class="q-py-xs q-gutter-xs text-caption">
+                <!-- Etapa actual -->
+                <div class="row items-center justify-between q-my-xs">
+                  <span class="text-grey-7">Etapa:</span>
+                  <q-badge :color="obtenerColorEstadoEquipo(servicio.estadoEquipo)" class="q-px-sm q-py-xs text-weight-bold">
+                    {{ obtenerEtiquetaEstadoEquipo(servicio.estadoEquipo) }}
+                  </q-badge>
+                </div>
+
+                <div class="row items-center justify-between text-grey-8">
+                  <span>Técnico: {{ servicio.tecnico }}</span>
+                  <span>{{ formatearFecha(servicio.fechaRecepcion) }}</span>
+                </div>
+
+                <div class="row items-center justify-between q-mt-xs text-subtitle2">
+                  <span>Precio: <strong>${{ formatearNumero(servicio.precio) }}</strong></span>
+                  <span class="text-caption text-grey-7">{{ obtenerEtiquetaPago(servicio.metodoPago) }}</span>
+                </div>
+
+                <div v-if="servicio.observaciones" class="text-grey-7 q-mt-xs text-italic">
+                  Obs: {{ servicio.observaciones }}
+                </div>
+
+                <div v-if="servicio.estadoEquipo === 'entregado'" class="q-mt-xs row items-center justify-between">
+                  <span class="text-grey-7">Calificación:</span>
+                  <q-rating
+                    v-model="servicio.calificacion"
+                    size="1.2em"
+                    color="amber"
+                    icon="star_border"
+                    icon-selected="star"
+                    @update:model-value="guardarCambiosDirectos()"
+                  />
+                </div>
+              </q-card-section>
+
+              <q-separator />
+
+              <q-card-actions align="right">
+                <q-btn flat dense icon="edit" color="primary" label="Editar" no-caps @click="abrirModalEditar(servicio)" />
+                <q-btn flat dense icon="delete" color="negative" label="Eliminar" no-caps @click="abrirConfirmarEliminar(servicio)" />
+              </q-card-actions>
+            </q-card>
+          </div>
+
+          <!-- Mensaje cuando NO hay servicios (sin icono) -->
+          <div v-if="obtenerServiciosFiltrados().length === 0" class="col-12 text-center q-pa-xl empty-box">
+            <div class="text-subtitle1 text-grey-8 text-weight-medium">No hay servicios registrados en esta sección</div>
+            <q-btn
+              v-if="textoBusqueda || filtroEstado !== 'todos'"
+              flat
+              color="primary"
+              label="Limpiar búsqueda y filtro"
+              class="q-mt-sm"
+              no-caps
+              @click="limpiarFiltros()"
+            />
+          </div>
+        </div>
+
+        <q-page-sticky position="bottom-right" :offset="[18, 18]">
+          <q-btn fab icon="add" color="primary" @click="abrirModalNuevo()" />
+        </q-page-sticky>
+      </q-page>
+    </q-page-container>
+
+    <!-- ===================== MODAL FORMULARIO (CON CASILLAS 100% VISIBLES Y CLARAS) ===================== -->
+    <q-dialog v-model="mostrarModalFormulario" persistent>
+      <q-card style="width: 650px; max-width: 95vw" class="modal-form-card">
+        <q-card-section class="row items-center bg-primary text-white">
+          <div class="text-h6 text-weight-bold">{{ modoEdicion ? 'Editar servicio' : 'Nuevo servicio' }}</div>
+          <q-space />
+          <q-btn flat round dense icon="close" @click="cerrarModalFormulario()" />
+        </q-card-section>
+
+        <!-- Fondo blanco brillante para casillas perfectamente visibles -->
+        <q-card-section style="max-height: 70vh" class="scroll bg-white text-grey-9 q-pa-md">
+          <q-form ref="formularioRef" class="q-gutter-md">
+            <div class="row q-col-gutter-md">
+              <div class="col-12 col-sm-6">
+                <q-input
+                  v-model="formulario.cliente"
+                  label="Nombre del cliente *"
+                  outlined
+                  dense
+                  bg-color="white"
+                  :rules="[val => (val && val.trim().length > 0) || 'El nombre del cliente es obligatorio']"
+                />
+              </div>
+              <div class="col-6 col-sm-3">
+                <q-input
+                  v-model="formulario.marca"
+                  label="Marca *"
+                  outlined
+                  dense
+                  bg-color="white"
+                  :rules="[val => (val && val.trim().length > 0) || 'Obligatorio']"
+                />
+              </div>
+              <div class="col-6 col-sm-3">
+                <q-input
+                  v-model="formulario.modelo"
+                  label="Modelo *"
+                  outlined
+                  dense
+                  bg-color="white"
+                  :rules="[val => (val && val.trim().length > 0) || 'Obligatorio']"
+                />
+              </div>
+
+              <div class="col-12 col-sm-6">
+                <q-select
+                  v-model="formulario.tipoReparacion"
+                  :options="opcionesTipoReparacion"
+                  emit-value
+                  map-options
+                  label="Tipo de reparación *"
+                  outlined
+                  dense
+                  bg-color="white"
+                  :rules="[val => !!val || 'Selecciona el tipo de reparación']"
+                />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-select
+                  v-model="formulario.tecnico"
+                  :options="opcionesTecnicos"
+                  label="Técnico que atendió *"
+                  outlined
+                  dense
+                  bg-color="white"
+                  :rules="[val => !!val || 'Selecciona un técnico']"
+                />
+              </div>
+
+              <div class="col-12 col-sm-6">
+                <q-input
+                  v-model="formulario.fechaRecepcion"
+                  type="datetime-local"
+                  label="Fecha y hora de recepción *"
+                  outlined
+                  dense
+                  bg-color="white"
+                  stack-label
+                  :rules="[val => !!val || 'La fecha es obligatoria']"
+                />
+              </div>
+              <div class="col-6 col-sm-3">
+                <q-input
+                  v-model.number="formulario.precio"
+                  type="number"
+                  label="Precio cobrado *"
+                  outlined
+                  dense
+                  bg-color="white"
+                  prefix="$"
+                  :rules="[val => val !== null && val >= 0 || 'Ingresa un precio válido']"
+                />
+              </div>
+              <div class="col-6 col-sm-3">
+                <q-select
+                  v-model="formulario.metodoPago"
+                  :options="opcionesMetodoPago"
+                  label="Método de pago *"
+                  outlined
+                  dense
+                  bg-color="white"
+                  :rules="[val => !!val || 'Selecciona un método']"
+                />
+              </div>
+
+              <div class="col-12 col-sm-6">
+                <q-select
+                  v-model="formulario.estadoPago"
+                  :options="opcionesEstadoPago"
+                  label="Estado del pago *"
+                  outlined
+                  dense
+                  bg-color="white"
+                  :rules="[val => !!val || 'Selecciona el estado del pago']"
+                />
+              </div>
+              <div class="col-12 col-sm-6" v-if="formulario.estadoPago === 'abono'">
+                <q-input
+                  v-model.number="formulario.montoAbonado"
+                  type="number"
+                  label="Monto abonado"
+                  outlined
+                  dense
+                  bg-color="white"
+                  prefix="$"
+                  :rules="[val => val >= 0 || 'Debe ser un valor positivo', val => val <= formulario.precio || 'El abono no puede superar el precio']"
+                />
+              </div>
+
+              <div class="col-12">
+                <q-select
+                  v-model="formulario.estadoEquipo"
+                  :options="opcionesEstadoEquipo"
+                  emit-value
+                  map-options
+                  label="Estado del equipo (Etapa) *"
+                  outlined
+                  dense
+                  bg-color="white"
+                  :rules="[val => !!val || 'Selecciona la etapa']"
+                />
+              </div>
+
+              <div class="col-12">
+                <q-input
+                  v-model="formulario.observaciones"
+                  type="textarea"
+                  label="Observaciones (opcional)"
+                  outlined
+                  dense
+                  bg-color="white"
+                  autogrow
+                  hint="Ej: pantalla partida en la esquina superior, no prende"
+                />
+              </div>
+            </div>
+          </q-form>
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-pa-md bg-grey-1">
+          <q-btn flat label="Cancelar" color="grey-8" @click="cerrarModalFormulario()" />
+          <q-btn unelevated label="Guardar" color="primary" icon="save" @click="guardarServicio()" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- ===================== MODAL CONFIRMAR ELIMINACIÓN ===================== -->
+    <q-dialog v-model="mostrarModalEliminar">
+      <q-card style="width: 400px; max-width: 90vw">
+        <q-card-section class="row items-center bg-negative text-white">
+          <div class="text-h6 text-weight-bold">¿Eliminar servicio?</div>
+        </q-card-section>
+        <q-card-section class="text-body2 text-grey-8 q-pa-md bg-white">
+          Vas a eliminar el registro de
+          <strong>{{ servicioAEliminar ? servicioAEliminar.cliente : '' }}</strong>
+          ({{ servicioAEliminar ? servicioAEliminar.marca + ' ' + servicioAEliminar.modelo : '' }}).
+          Esta acción no se puede deshacer.
+        </q-card-section>
+        <q-card-actions align="right" class="bg-grey-1 q-pa-md">
+          <q-btn flat label="Cancelar" color="grey-8" @click="mostrarModalEliminar = false" />
+          <q-btn unelevated label="Sí, eliminar" color="negative" icon="delete" @click="eliminarServicio()" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Notification Banner -->
+    <q-banner
+      v-if="mensajeAviso"
+      class="fixed-bottom text-white text-center text-weight-bold"
+      :class="mensajeAvisoTipo === 'error' ? 'bg-negative' : 'bg-positive'"
+      style="z-index: 9999"
+    >
+      {{ mensajeAviso }}
+    </q-banner>
+  </q-layout>
+</template>
+
+<script setup>
+import { ref, watch } from 'vue'
+
+/* =========================================================
+   HELPER LOCAL STORAGE (Reemplazo nativo con Vue API)
+   ========================================================= */
+function useLocalStorageCustom(key, valorInicial) {
+  const guardado = localStorage.getItem(key)
+  let datos = valorInicial
+
+  if (guardado !== null) {
+    try {
+      datos = JSON.parse(guardado)
+    } catch (e) {
+      console.error('Error al leer de localStorage:', e)
+    }
+  }
+
+  const estado = ref(datos)
+
+  watch(
+    estado,
+    (nuevoValor) => {
+      try {
+        localStorage.setItem(key, JSON.stringify(nuevoValor))
+      } catch (e) {
+        console.error('Error al guardar en localStorage:', e)
+      }
+    },
+    { deep: true }
+  )
+
+  return estado
+}
+
+/* =========================================================
+   OPCIONES FIJAS (catálogos del taller)
+   ========================================================= */
+const opcionesTipoReparacion = [
+  { label: 'Cambio de pantalla', value: 'pantalla' },
+  { label: 'Cambio de batería', value: 'bateria' },
+  { label: 'Cambio de pin de carga', value: 'pin_carga' },
+  { label: 'Liberación', value: 'liberacion' },
+  { label: 'Mantenimiento de software', value: 'software' },
+  { label: 'Cambio de flex', value: 'flex' },
+  { label: 'Otros', value: 'otros' },
+]
+
+const opcionesTecnicos = ['Don Efraín', 'Técnico 1', 'Técnico 2']
+const opcionesMetodoPago = ['Efectivo', 'Transferencia', 'Tarjeta']
+const opcionesEstadoPago = ['pagado', 'pendiente', 'abono']
+
+const opcionesEstadoEquipo = [
+  { label: 'Recibido', value: 'recibido' },
+  { label: 'En reparación', value: 'en_reparacion' },
+  { label: 'Listo para entregar', value: 'listo' },
+  { label: 'Entregado', value: 'entregado' },
+]
+
+const opcionesFiltroEtapas = [
+  { label: 'Todas las etapas', value: 'todos' },
+  { label: 'Recibidos', value: 'recibido' },
+  { label: 'En reparación', value: 'en_reparacion' },
+  { label: 'Listos para entregar', value: 'listo' },
+  { label: 'Entregados', value: 'entregado' },
+]
+
+/* =========================================================
+   ESTADO PRINCIPAL (persistido en localStorage)
+   ========================================================= */
+const servicios = useLocalStorageCustom('taller-don-efrain-servicios', [])
+
+/* =========================================================
+   ESTADO DE UI
+   ========================================================= */
+const mostrarModalFormulario = ref(false)
+const mostrarModalEliminar = ref(false)
+const modoEdicion = ref(false)
+const idEnEdicion = ref(null)
+const servicioAEliminar = ref(null)
+const formularioRef = ref(null)
+
+const textoBusqueda = ref('')
+const filtroEstado = ref('todos')
+
+const mensajeAviso = ref('')
+const mensajeAvisoTipo = ref('exito')
+
+const formularioVacio = () => ({
+  cliente: '',
+  marca: '',
+  modelo: '',
+  tipoReparacion: null,
+  tecnico: null,
+  fechaRecepcion: '',
+  precio: 0,
+  metodoPago: null,
+  estadoPago: null,
+  montoAbonado: 0,
+  estadoEquipo: 'recibido',
+  calificacion: 0,
+  observaciones: '',
+})
+
+const formulario = ref(formularioVacio())
+
+/* =========================================================
+   FUNCIONES: MODAL FORMULARIO (ALTA / EDICIÓN)
+   ========================================================= */
+function abrirModalNuevo() {
+  modoEdicion.value = false
+  idEnEdicion.value = null
+  formulario.value = formularioVacio()
+  formulario.value.fechaRecepcion = obtenerFechaHoraActual()
+  mostrarModalFormulario.value = true
+}
+
+function abrirModalEditar(servicio) {
+  modoEdicion.value = true
+  idEnEdicion.value = servicio.id
+  formulario.value = { ...servicio }
+  mostrarModalFormulario.value = true
+}
+
+function cerrarModalFormulario() {
+  mostrarModalFormulario.value = false
+  formulario.value = formularioVacio()
+}
+
+function guardarServicio() {
+  formularioRef.value.validate().then((esValido) => {
+    if (!esValido) {
+      mostrarAviso('Revisa los campos marcados en rojo', 'error')
+      return
+    }
+
+    if (modoEdicion.value) {
+      const indice = servicios.value.findIndex(s => s.id === idEnEdicion.value)
+      if (indice !== -1) {
+        servicios.value[indice] = { ...formulario.value, id: idEnEdicion.value }
+      }
+      mostrarAviso('Servicio actualizado correctamente')
+    } else {
+      const nuevoServicio = {
+        ...formulario.value,
+        id: Date.now().toString(),
+      }
+      servicios.value.unshift(nuevoServicio)
+      mostrarAviso('Servicio registrado correctamente')
+    }
+
+    cerrarModalFormulario()
+  })
+}
+
+function guardarCambiosDirectos() {
+  mostrarAviso('Calificación guardada')
+}
+
+/* =========================================================
+   FUNCIONES: ELIMINAR
+   ========================================================= */
+function abrirConfirmarEliminar(servicio) {
+  servicioAEliminar.value = servicio
+  mostrarModalEliminar.value = true
+}
+
+function eliminarServicio() {
+  servicios.value = servicios.value.filter(s => s.id !== servicioAEliminar.value.id)
+  mostrarModalEliminar.value = false
+  mostrarAviso('Servicio eliminado')
+  servicioAEliminar.value = null
+}
+
+/* =========================================================
+   FUNCIONES: FILTRADO Y BÚSQUEDA
+   ========================================================= */
+function obtenerServiciosFiltrados() {
+  let resultado = servicios.value
+
+  if (filtroEstado.value !== 'todos') {
+    resultado = resultado.filter(s => s.estadoEquipo === filtroEstado.value)
+  }
+
+  if (textoBusqueda.value && textoBusqueda.value.trim().length > 0) {
+    const texto = textoBusqueda.value.trim().toLowerCase()
+    resultado = resultado.filter(s =>
+      s.cliente.toLowerCase().includes(texto) ||
+      s.marca.toLowerCase().includes(texto) ||
+      s.modelo.toLowerCase().includes(texto)
+    )
+  }
+
+  return resultado
+}
+
+function limpiarFiltros() {
+  textoBusqueda.value = ''
+  filtroEstado.value = 'todos'
+}
+
+/* =========================================================
+   FUNCIONES: ESTADÍSTICAS RÁPIDAS
+   ========================================================= */
+function contarPorEstado(estado) {
+  return servicios.value.filter(s => s.estadoEquipo === estado).length
+}
+
+function contarPagosPendientes() {
+  return servicios.value.filter(s => s.estadoPago === 'pendiente').length
+}
+
+function totalFiado() {
+  return servicios.value
+    .filter(s => s.estadoPago === 'abono')
+    .reduce((total, s) => total + calcularSaldo(s), 0)
+}
+
+function calcularSaldo(servicio) {
+  const abonado = servicio.montoAbonado || 0
+  return Math.max(servicio.precio - abonado, 0)
+}
+
+/* =========================================================
+   ESTILOS Y ETIQUETAS DE ETAPAS
+   ========================================================= */
+function obtenerColorEstadoEquipo(estado) {
+  if (estado === 'recibido') return 'blue-grey'
+  if (estado === 'en_reparacion') return 'orange-9'
+  if (estado === 'listo') return 'positive'
+  if (estado === 'entregado') return 'grey-7'
+  return 'grey'
+}
+
+function obtenerEtiquetaEstadoEquipo(estado) {
+  if (estado === 'recibido') return 'Recibido'
+  if (estado === 'en_reparacion') return 'En reparación'
+  if (estado === 'listo') return 'Listo para entregar'
+  if (estado === 'entregado') return 'Entregado'
+  return estado
+}
+
+function obtenerEtiquetaReparacion(valor) {
+  const encontrado = opcionesTipoReparacion.find(o => o.value === valor)
+  return encontrado ? encontrado.label : valor
+}
+
+function obtenerEtiquetaPago(metodo) {
+  return metodo || '—'
+}
+
+function formatearNumero(valor) {
+  const numero = Number(valor) || 0
+  return numero.toLocaleString('es-CO')
+}
+
+function formatearFecha(fechaISO) {
+  if (!fechaISO) return 'Sin fecha'
+  const fecha = new Date(fechaISO)
+  return fecha.toLocaleString('es-CO', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function obtenerFechaHoraActual() {
+  const ahora = new Date()
+  const offset = ahora.getTimezoneOffset()
+  const local = new Date(ahora.getTime() - offset * 60000)
+  return local.toISOString().slice(0, 16)
+}
+
+let temporizadorAviso = null
+function mostrarAviso(texto, tipo = 'exito') {
+  mensajeAviso.value = texto
+  mensajeAvisoTipo.value = tipo
+  if (temporizadorAviso) clearTimeout(temporizadorAviso)
+  temporizadorAviso = setTimeout(() => {
+    mensajeAviso.value = ''
+  }, 2500)
+}
+</script>
+
+<style scoped>
+.app-layout {
+  background-color: #f8fafc;
+  color: #1e293b;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+.header-taller {
+  background-color: #1e293b;
+}
+
+.header-search-input {
+  width: 320px;
+  max-width: 100%;
+}
+
+.btn-nuevo {
+  border-radius: 8px;
+}
+
+.page-content {
+  background-color: #f8fafc;
+  min-height: 100vh;
+}
+
+.stat-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.control-bar {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.device-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.empty-box {
+  background-color: #ffffff;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+}
+
+.modal-form-card {
+  border-radius: 12px;
+  overflow: hidden;
+}
+</style>
